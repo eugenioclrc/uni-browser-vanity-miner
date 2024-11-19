@@ -159,6 +159,9 @@
                         console.log(allResults)
                         localStorage.setItem('allResults-'+wallet, JSON.stringify(allResults));
                         recordBreak = true;
+                        if (bestscore < 70) {
+                            recordBreak = false;
+                        }
                     }
 
                     _workerStruct.loops += 1;
