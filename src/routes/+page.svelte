@@ -109,6 +109,14 @@
 
        localStorage.setItem('wallet', wallet);
 
+       bestscore = Number(localStorage.getItem('bestscore-'+wallet)) || 0;
+        
+        try {
+            allResults = JSON.parse(localStorage.getItem('allResults-'+wallet)) || [];
+        } catch (e) {
+            allResults = [];
+        }
+        
        isMining = true;
        cores = Math.min(cores, Math.min(navigator.hardwareConcurrency, 20));
 
