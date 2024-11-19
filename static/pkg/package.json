@@ -1,0 +1,14 @@
+{
+  "name": "uni-vanity",
+  "version": "0.1.0",
+  "files": [
+    "uni_vanity_bg.wasm",
+    "uni_vanity.js",
+    "uni_vanity.d.ts"
+  ],
+  "module": "uni_vanity.js",
+  "types": "uni_vanity.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
