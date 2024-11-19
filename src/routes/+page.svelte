@@ -8,6 +8,7 @@
    let isMining = false;
    let bestscore = 0;
    let allResults = [];
+   let neverStop = false;
    const LOOPS = 100000;
 
    let hashPerSecond = 0;
@@ -63,6 +64,8 @@
         } catch (e) {
             allResults = [];
         }
+
+        neverStop = localStorage.getItem('neverStop') === 'true';
    })
 
 
@@ -108,6 +111,7 @@
        }
 
        localStorage.setItem('wallet', wallet);
+       localStorage.setItem('neverStop', neverStop ? 'true' : 'false');
 
        bestscore = Number(localStorage.getItem('bestscore-'+wallet)) || 0;
         
@@ -116,7 +120,7 @@
         } catch (e) {
             allResults = [];
         }
-        
+
        isMining = true;
        cores = Math.min(cores, Math.min(navigator.hardwareConcurrency, 20));
 
@@ -159,7 +163,7 @@
                     // looping
                     //console.log('Worker' + i, event.data.results);
                     let recordBreak = false;
-                    if(event.data.results.score > bestscore) {
+                    if(event.data.results && event.data.results.score && event.data.results.score > bestscore) {
                         bestscore = event.data.results.score;
                         localStorage.setItem('bestscore-'+wallet, String(bestscore));
                         allResults.push(event.data.results);
@@ -167,7 +171,7 @@
                         console.log(allResults)
                         localStorage.setItem('allResults-'+wallet, JSON.stringify(allResults));
                         recordBreak = true;
-                        if (bestscore < 70) {
+                        if (bestscore < 70 || neverStop) {
                             recordBreak = false;
                         }
                     }
@@ -249,7 +253,12 @@
         {/if}
         {#if hashPerSecond}
         Hashes per second: {hashPerSecond}
-        {/if}
+        {/if}<br />
+        <!-- input checkbox to never stop-->
+         <label for="neverstop" class="block">
+            <input type="checkbox" id="neverstop" bind:checked={neverStop} />
+        <span class="ml-2">Never stop mining</span>
+         </label>
     
         <hr class="m-2" />
         <h3 class="text-2xl font-semibold mb-4">IMPORTANT</h3>
