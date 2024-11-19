@@ -1,151 +1,205 @@
 <script>
-  import { dataLength } from 'ethers';
-    import { onMount } from 'svelte';
+    import {
+       onMount
+   } from 'svelte';
 
-    let totalCores;
-    let cores = 3;
-    let isMining = false;
+   let totalCores;
+   let cores = 3;
+   let isMining = false;
+   let bestscore = 0;
+   let allResults = [];
+   const LOOPS = 100000;
 
-    let intervalCount;
-    let wallet;
+   let hashPerSecond = 0;
 
-    function increaseCores() {
-        if (isMining) return;
-        cores = Math.min(16, cores + 1);
-    }
+   /**
+   * @type {number | undefined}
+   */
+   let intervalCount;
+   /**
+   * @type {string}
+   */
+   let wallet;
 
-    function decreaseCores() {
-        if (isMining) return;
-        cores = Math.max(1, cores - 1);
-    }
+   function increaseCores() {
+       if (isMining) return;
+       cores = Math.min(16, cores + 1);
+   }
+
+   function decreaseCores() {
+       if (isMining) return;
+       cores = Math.max(1, cores - 1);
+   }
+
+   /**
+    * Checks if the given string is an address
+    *
+    * @method isAddress
+    * @param {String} address the given HEX adress
+    * @return {Boolean}
+    */
+   function isAddress(address) {
+       if (!/^(0x)?[0-9a-f]{40}$/i.test(address)) {
+           // check if it has the basic requirements of an address
+           return false;
+       }
+       // no checksum
+       return (/^(0x)?[0-9a-f]{40}$/i.test(address));
+   };
+
+   onMount(() => {
+       totalCores = navigator.hardwareConcurrency;
+       cores = Math.ceil(totalCores / 2);
+
+       wallet = String(localStorage.getItem('wallet') || '')
+          
+        if (wallet && !isAddress(wallet)) {
+            wallet = '';
+        }
+        bestscore = Number(localStorage.getItem('bestscore-'+wallet)) || 0;
+        
+        try {
+            allResults = JSON.parse(localStorage.getItem('allResults-'+wallet)) || [];
+        } catch (e) {
+            allResults = [];
+        }
+   })
+
 
 /**
- * Checks if the given string is an address
- *
- * @method isAddress
- * @param {String} address the given HEX adress
- * @return {Boolean}
-*/
-function isAddress(address) {
-    if (!/^(0x)?[0-9a-f]{40}$/i.test(address)) {
-        // check if it has the basic requirements of an address
-        return false;
-    }
-    // no checksum
-    return (/^(0x)?[0-9a-f]{40}$/i.test(address));
-};
+   * @type {any[]}
+   */
+   let workers = [];
 
-onMount(() => {		
-    totalCores = navigator.hardwareConcurrency;
-    cores = Math.ceil(totalCores / 2);
-})
+   function doStop() {
+       isMining = false;
+       workers.forEach((w) => {
+           w.worker.terminate();
+           w.status = 'stop';
+       });
+       workers = [...workers];
+       clearInterval(intervalCount);
+   }
 
+   function terminateWorkers() {
+       doStop();
+       workers = [];
+   }
 
-let workers = [];
+   let globalStart = 0;
+   let globalElapsed = 0;
 
-function doStop() {
-    isMining = false;
-    workers.forEach((w) => {
-        w.worker.terminate();
-        w.status = 'stop';
-    });
-    workers = [...workers];
-    clearInterval(intervalCount);
-}
+   function startMining() {
+       terminateWorkers();
 
-function terminateWorkers() {
-		doStop();
-		workers = [];
-	}
+       intervalCount = setInterval(() => {
+            hashPerSecond = workers.reduce((acc, w) => acc + w.hashPerSecond, 0);
+        }, 1000);
 
-    let globalStart = 0;
-    let globalElapsed = 0;
-function startMining() {
-		terminateWorkers();
+       if (!wallet) {
+           alert('Please enter a valid Ethereum address, on wallet field');
+           return;
+       }
 
-		isMining = true;
-		cores= Math.min(cores, Math.min(navigator.hardwareConcurrency, 20));
+       if (!isAddress(wallet)) {
+           alert('Please enter a valid Ethereum address, on wallet field');
+           wallet = '';
+           return;
+       }
 
-		globalStart = +new Date();
-		intervalCount = setInterval(() => {
-			globalElapsed = +new Date() - globalStart;
-		}, 1000);
+       localStorage.setItem('wallet', wallet);
 
-		for (let i = 0; i < cores; i++) {
-			const worker = new Worker('/sw.js', { type: 'module' });
-            window.worker = worker;
-			workers[i] = { worker: worker, status: 'init', start: 0, end: 0, loops: 0, hashPerSecond: 0 };
+       isMining = true;
+       cores = Math.min(cores, Math.min(navigator.hardwareConcurrency, 20));
 
-			let time;
+       globalStart = +new Date();
+       //setInterval(() => {
+          // globalElapsed = +new Date() - globalStart;
+       //}, 1000);
 
-			worker.onmessage = function (event) {
+       for (let i = 0; i < cores; i++) {
+           const worker = new Worker('/sw.js', {
+               type: 'module'
+           });
+           workers[i] = {
+               worker: worker,
+               status: 'init',
+               start: 0,
+               end: 0,
+               loops: 0,
+               hashPerSecond: 0
+           };
+
+           let time;
+
+            worker.onmessage = function(event) {
                 const _workerStruct = workers[i];
-				// console.log('Worker' + i, event.data.status);
-				_workerStruct.status = event.data.status;
-
-				_workerStruct.start = _workerStruct.start || Date.now();
-
-
-                worker.onmessage = async function (event) {
-                    console.log('Worker' + i, event.data.status);
+                // console.log('Worker' + i, event.data.status);
+                _workerStruct.status = event.data.status;
+                worker.onmessage = async function(event) {
                     if (event.data.status === 'ready') {
                         _workerStruct.start = Date.now();
-
+                        _workerStruct.loops = 0;
                         worker.postMessage({
-                            wallet: "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-                            bestscore: 0,
-                            times: 10000
+                           wallet,
+                           bestscore,
+                           times: LOOPS
                         });
                         return;
                     }
-                    console.log(event)
-                    console.log('Worker' + i, event.data.results);
-                    //const buttpluggyId = (BigInt('0x' + event.data.results.hash) % 1024n) + 1n;
-                    //const owner = await ownerOf(buttpluggyId);
-                    //foundNonce(event.data.results, owner);
+
+                    // looping
+                    //console.log('Worker' + i, event.data.results);
+                    let recordBreak = false;
+                    if(event.data.results.score > bestscore) {
+                        bestscore = event.data.results.score;
+                        localStorage.setItem('bestscore-'+wallet, String(bestscore));
+                        allResults.push(event.data.results);
+                        allResults = [...allResults];
+                        console.log(allResults)
+                        localStorage.setItem('allResults-'+wallet, JSON.stringify(allResults));
+                        recordBreak = true;
+                    }
+
+                    _workerStruct.loops += 1;
+                    _workerStruct.hashPerSecond = Math.floor(
+                        (_workerStruct.loops * LOOPS) / ((Date.now() - _workerStruct.start) / 1000)
+                    );
+                    //console.log('Worker' + i + ', hash/sec:', _workerStruct.hashPerSecond);
+                    _workerStruct.end = 0;
+
+                    if(recordBreak) {
+                        doStop();
+                        return;
+                    } else {
+                        worker.postMessage({
+                            wallet,
+                            bestscore,
+                            times: LOOPS
+                        });
+                    }
                     //doStop();
-                    //clearInterval(intervalCount);
                     //return;
                 }
-                _workerStruct.loops += 1;
-                _workerStruct.hashPerSecond = Math.floor(
-                    (_workerStruct.loops * 1000000) / ((Date.now() - _workerStruct.start) / 1000)
-                );
-                console.log('Worker' + i + ', hash/sec:', _workerStruct.hashPerSecond);
-                _workerStruct.end = 0;
+               
 
-                // loop
-                worker
-                /*.postMessage({
-                    wallet:new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-                    bestscore: 0n,
-                    times: 10000
-                });*/
+               // loop
+               worker.postMessage({
+                   wallet,
+                   bestscore,
+                   times: LOOPS
+               });
+           };
 
-                .postMessage({
-                    wallet: "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-                    bestscore: 0,
-                times: 10000
-                });
-            };
-
-            worker
-            .postMessage({
-                wallet: "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-                bestscore: 0,
-                times: 10000
-                });
-                /*
-            .postMessage({
-                wallet: new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-                bestscore: 0n,
-                times: 10000
-            });
-            */
-        };
-		workers = [...workers];
-}
-
+           worker
+               .postMessage({
+                   wallet,
+                   bestscore,
+                   times: LOOPS
+               });
+       };
+       workers = [...workers];
+   }
 </script>
 
 <style>
@@ -167,7 +221,7 @@ function startMining() {
         <h2 class="text-2xl font-semibold mb-4">Submission Instructions</h2>
         <p class="mb-4">*Participants can submit as many unique addresses as they want during the challenge. To make sure that only you can submit your salt, set the first 20 bytes of your salt to the Ethereum address executing the submission. Alternatively, you can leave the first 20 bytes as 0 bytes, but your submission could be frontrun. The last 12 bytes of the salt can be anything you choose.</p>
         <div class="mb-4">
-            <label for="wallet" class="block text-lg font-semibold mb-2">Number of Cores to Use:</label>
+            <label for="wallet" class="block text-lg font-semibold mb-2">Your wallet address:</label>
             <input id="wallet" bind:value={wallet} type="text" class="w-full p-2 mb-1 rounded bg-gray-700 text-white" placeholder="Enter your Ethereum address">
             <label for="cores" class="block text-lg font-semibold mb-2">Number of Cores to Use:</label>
             <div class="flex items-center space-x-4">
@@ -180,8 +234,19 @@ function startMining() {
             <button class="bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-4 rounded" on:click={startMining}>Start Mining Now</button>
         {:else}
             <button class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded" on:click={doStop}>Stop Mining</button>
+        
+        {/if}
+        {#if hashPerSecond}
+        Hashes per second: {hashPerSecond}
         {/if}
     
+        <hr class="m-2" />
+        <h3 class="text-2xl font-semibold mb-4">IMPORTANT</h3>
+        <p class="text-xl">
+            Once you got a salt you can submit it using etherscan:
+             <a target="_blank" class="underline hover:text-pink-600 text-pink-500" href="https://etherscan.io/address/0x48e516b34a1274f49457b9c6182097796d0498cb#writeContract#F2">0x48e516b34a1274f49457b9c6182097796d0498cb</a>,
+              if you need more info read this blogpost: <a target="_blank" class="underline hover:text-pink-600 text-pink-500" href="https://blog.uniswap.org/uniswap-v4-address-mining-challenge">https://blog.uniswap.org/uniswap-v4-address-mining-challenge</a>
+        </p>
     </section>
   
   
@@ -197,12 +262,14 @@ function startMining() {
             </tr>
           </thead>
           <tbody>
+            {#each allResults.sort((a,b) => b.score - a.score) as r}
             <!-- Example row -->
             <tr class="bg-gray-800 border-b border-gray-600">
-              <td class="py-3 px-6">0x1234567890abcdef</td>
-              <td class="py-3 px-6">0x44440000abcd1234</td>
-              <td class="py-3 px-6">120</td>
+              <td class="py-3 px-6">0x{r.salt}</td>
+              <td class="py-3 px-6">0x{r.address}</td>
+              <td class="py-3 px-6">{r.score}</td>
             </tr>
+            {/each}
             <!-- Additional rows will be dynamically added here -->
           </tbody>
         </table>

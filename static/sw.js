@@ -12,14 +12,12 @@ init().then(() => {
 });
 
 self.onmessage = (e) => {
-    debugger;
     if (!ready) {
         self.postMessage({ status: "not_ready" });
         return;
     }
 
     const { wallet, bestscore, times } = e.data;
-    
 
     try {
         // Compute results using loop_hash
