@@ -265,7 +265,8 @@
         <p class="text-xl">
             Once you got a salt you can submit it using etherscan:
              <a target="_blank" class="underline hover:text-pink-600 text-pink-500" href="https://etherscan.io/address/0x48e516b34a1274f49457b9c6182097796d0498cb#writeContract#F2">0x48e516b34a1274f49457b9c6182097796d0498cb</a>,
-              if you need more info read this blogpost: <a target="_blank" class="underline hover:text-pink-600 text-pink-500" href="https://blog.uniswap.org/uniswap-v4-address-mining-challenge">https://blog.uniswap.org/uniswap-v4-address-mining-challenge</a>
+              if you need more info read this blogpost: <a target="_blank" class="underline hover:text-pink-600 text-pink-500" href="https://blog.uniswap.org/uniswap-v4-address-mining-challenge">https://blog.uniswap.org/uniswap-v4-address-mining-challenge</a>, 
+also check the leader board on: <a href="https://v4-address.uniswap.org/" target="_blank">https://v4-address.uniswap.org/</a>
         </p>
     </section>
   
